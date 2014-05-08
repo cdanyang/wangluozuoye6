@@ -9,7 +9,13 @@ import java.net.InetAddress;
 import java.net.Socket;
 import java.util.Random;
 
-public class Client {
+/**
+ * Client class
+ * 
+ * @author Shu Zhao
+ * 
+ */
+public class Client implements Runnable {
 	private final int selfId;
 	Socket socket;
 	Thread readThread, writeThread;
@@ -20,23 +26,25 @@ public class Client {
 		socket = new Socket(server, port);
 		OutputStream out = socket.getOutputStream();
 		InputStream in = socket.getInputStream();
-		out.write(clientId);
-		out.flush();
 		readThread = new Thread(new ReadRunnable(in));
 		writeThread = new Thread(new WriteRunnable(out));
 	}
 
-	public void start() {
+	@Override
+	public void run() {
 		readThread.start();
 		writeThread.start();
 		try {
-			readThread.join();
-			writeThread.join();
+			readThread.join(Const.CLIENT_MAX_WAIT_TIME * 2);
+			writeThread.join(Const.CLIENT_MAX_WAIT_TIME * 2);
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
 	}
 
+	/**
+	 * Thread to receive data from Router
+	 */
 	private class ReadRunnable implements Runnable {
 
 		final InputStream in;
@@ -57,11 +65,7 @@ public class Client {
 								"Client %d: Received packet for %d", selfId,
 								buffer[0]));
 						continue;
-					} else {
-						System.out.println(String.format(
-								"Client %d received packet from %d", selfId,
-								buffer[1]));
-					}
+					} 
 					String fileName = String.format("file_from_%d_to_%d",
 							buffer[1], buffer[0]);
 					FileOutputStream fout = new FileOutputStream(new File(
@@ -78,6 +82,9 @@ public class Client {
 		}
 	}
 
+	/**
+	 * Thread to send data to Router
+	 */
 	private class WriteRunnable implements Runnable {
 		final OutputStream out;
 
@@ -90,15 +97,23 @@ public class Client {
 			byte[] buffer = new byte[Const.BUFFER_SIZE + Const.HEADER_SIZE];
 
 			try {
+				// First send its identity
+				out.write(selfId);
+				out.flush();
+
 				Random random = new Random();
-				Thread.sleep(random.nextInt(5000) + 1000);
+				// Random delay between 1 second to 6 seconds
+				Thread.sleep(random.nextInt(Const.CLIENT_MAX_WAIT_TIME) + 1000);
+				// Random pick a target client to send
 				int target = random.nextInt(Const.MAX_CLIENT);
 				String fileName;
+				// Random choose file A or B
 				if (random.nextBoolean())
 					fileName = Const.FILE_A;
 				else
 					fileName = Const.FILE_B;
 				FileInputStream fin = new FileInputStream(new File(fileName));
+
 				int len;
 				int seq = 0;
 				System.out.println(String.format(
@@ -122,29 +137,34 @@ public class Client {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
-
 		}
 	}
 
 	/**
 	 * @param args
 	 * @throws IOException
+	 * @throws InterruptedException
 	 */
-	public static void main(String[] args) throws IOException {
-		if (args.length != 3) // Test for correct # of args
-			throw new IllegalArgumentException(
-					"Parameter(s): <Server> <Port> <ClientId>");
+	public static void main(String[] args) throws IOException,
+			InterruptedException {
+		if (args.length != 2) // Test for correct # of args
+			throw new IllegalArgumentException("Parameter(s): <Server> <Port>");
 
 		InetAddress serverAddr = InetAddress.getByName(args[0]);
 		int servPort = Integer.parseInt(args[1]);
-		int clientId = Integer.parseInt(args[2]);
 
-		if (clientId >= Const.MAX_CLIENT || clientId < 0) {
-			throw new IllegalArgumentException(String.format(
-					"Clientd must between 0 and %d", Const.MAX_CLIENT - 1));
+		Thread[] clientPool = new Thread[Const.MAX_CLIENT];
+
+		// Start 10 clients simultaneously
+		for (int i = 0; i < Const.MAX_CLIENT; i++) {
+			clientPool[i] = new Thread(new Client(serverAddr, servPort, i));
+			// Client cln = new Client(serverAddr, servPort, i);
+			clientPool[i].start();
 		}
-		Client cln = new Client(serverAddr, servPort, clientId);
-		cln.start();
+
+		for (int i = 0; i < Const.MAX_CLIENT; i++) {
+			clientPool[i].join();
+		}
 
 	}
 

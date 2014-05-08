@@ -3,9 +3,14 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.ArrayList;
 import java.util.Arrays;
 
+/**
+ * Router class
+ * 
+ * @author Shu Zhao
+ * 
+ */
 public class Router {
 
 	private ServerSocket servSock;
@@ -23,6 +28,9 @@ public class Router {
 		}
 	}
 
+	/**
+	 * Thread to handle client communication.
+	 */
 	private class RouterRunnable implements Runnable {
 
 		Socket clientSocket;
@@ -54,11 +62,13 @@ public class Router {
 						continue;
 					}
 					targetClient = buffer[0];
+					// Check target client
 					if (clientPool[targetClient] == null) {
 						System.out.println("Unknown target client: "
 								+ targetClient);
 					} else {
-						OutputStream out = clientPool[targetClient].getOutputStream();
+						OutputStream out = clientPool[targetClient]
+								.getOutputStream();
 						out.write(buffer);
 						out.flush();
 					}
@@ -70,29 +80,6 @@ public class Router {
 			}
 			while (true) {
 
-			}
-		}
-	}
-
-	private class RouterWriteRunnable implements Runnable {
-
-		Socket clientSocket;
-		byte[] dataToSend;
-
-		public RouterWriteRunnable(Socket client, byte[] data, int len) {
-			clientSocket = client;
-			dataToSend = new byte[len];
-			System.arraycopy(data, 0, dataToSend, 0, len);
-		}
-
-		@Override
-		public void run() {
-			try {
-				OutputStream out = clientSocket.getOutputStream();
-				out.write(dataToSend);
-				out.flush();
-			} catch (IOException e) {
-				e.printStackTrace();
 			}
 		}
 	}
