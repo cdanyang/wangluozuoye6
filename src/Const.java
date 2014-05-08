@@ -16,5 +16,5 @@ public class Const {
 
 	public static final int MAX_CLIENT = 10;
 
-	public static final int CLIENT_MAX_WAIT_TIME = 5000;
+	public static final int CLIENT_MAX_WAIT_TIME = 10000;
 }

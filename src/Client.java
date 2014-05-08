@@ -15,7 +15,7 @@ import java.util.Random;
  * @author Shu Zhao
  * 
  */
-public class Client implements Runnable {
+public class Client {
 	private final int selfId;
 	Socket socket;
 	Thread readThread, writeThread;
@@ -30,13 +30,12 @@ public class Client implements Runnable {
 		writeThread = new Thread(new WriteRunnable(out));
 	}
 
-	@Override
-	public void run() {
+	public void start() {
 		readThread.start();
 		writeThread.start();
 		try {
-			readThread.join(Const.CLIENT_MAX_WAIT_TIME * 2);
-			writeThread.join(Const.CLIENT_MAX_WAIT_TIME * 2);
+			readThread.join();
+			writeThread.join();
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
@@ -65,7 +64,11 @@ public class Client implements Runnable {
 								"Client %d: Received packet for %d", selfId,
 								buffer[0]));
 						continue;
-					} 
+					} else if (buffer[2] == 1) {
+						System.out.println(String.format(
+								"Client %d: Received packet from %d", selfId,
+								buffer[1]));
+					}
 					String fileName = String.format("file_from_%d_to_%d",
 							buffer[1], buffer[0]);
 					FileOutputStream fout = new FileOutputStream(new File(
@@ -95,38 +98,40 @@ public class Client implements Runnable {
 		@Override
 		public void run() {
 			byte[] buffer = new byte[Const.BUFFER_SIZE + Const.HEADER_SIZE];
-
 			try {
 				// First send its identity
 				out.write(selfId);
 				out.flush();
 
 				Random random = new Random();
-				// Random delay between 1 second to 6 seconds
-				Thread.sleep(random.nextInt(Const.CLIENT_MAX_WAIT_TIME) + 1000);
-				// Random pick a target client to send
-				int target = random.nextInt(Const.MAX_CLIENT);
-				String fileName;
-				// Random choose file A or B
-				if (random.nextBoolean())
-					fileName = Const.FILE_A;
-				else
-					fileName = Const.FILE_B;
-				FileInputStream fin = new FileInputStream(new File(fileName));
+				while (true) {
+					// Random delay between 1 second to 11 seconds
+					Thread.sleep(random.nextInt(Const.CLIENT_MAX_WAIT_TIME) + 1000);
+					// Random pick a target client to send
+					int target = random.nextInt(Const.MAX_CLIENT);
+					String fileName;
+					// Random choose file A or B
+					if (random.nextBoolean())
+						fileName = Const.FILE_A;
+					else
+						fileName = Const.FILE_B;
+					FileInputStream fin = new FileInputStream(
+							new File(fileName));
 
-				int len;
-				int seq = 0;
-				System.out.println(String.format(
-						"Client %d sent %s to client %d", selfId, fileName,
-						target));
-				while ((len = fin.read(buffer, Const.HEADER_SIZE,
-						Const.BUFFER_SIZE)) != -1) {
-					buffer[0] = (byte) target;
-					buffer[1] = (byte) selfId;
-					buffer[2] = (byte) seq++;
-					out.write(buffer, 0, len + Const.HEADER_SIZE);
+					int len;
+					int seq = 0;
+					System.out.println(String.format(
+							"Client %d sent %s to client %d", selfId, fileName,
+							target));
+					while ((len = fin.read(buffer, Const.HEADER_SIZE,
+							Const.BUFFER_SIZE)) != -1) {
+						buffer[0] = (byte) target;
+						buffer[1] = (byte) selfId;
+						buffer[2] = (byte) seq++;
+						out.write(buffer, 0, len + Const.HEADER_SIZE);
+					}
+					out.flush();
 				}
-				out.flush();
 			} catch (FileNotFoundException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
@@ -147,25 +152,19 @@ public class Client implements Runnable {
 	 */
 	public static void main(String[] args) throws IOException,
 			InterruptedException {
-		if (args.length != 2) // Test for correct # of args
-			throw new IllegalArgumentException("Parameter(s): <Server> <Port>");
+		if (args.length != 3) // Test for correct # of args
+			throw new IllegalArgumentException(
+					"Parameter(s): <Server> <Port> <clientId>");
 
 		InetAddress serverAddr = InetAddress.getByName(args[0]);
 		int servPort = Integer.parseInt(args[1]);
-
-		Thread[] clientPool = new Thread[Const.MAX_CLIENT];
-
-		// Start 10 clients simultaneously
-		for (int i = 0; i < Const.MAX_CLIENT; i++) {
-			clientPool[i] = new Thread(new Client(serverAddr, servPort, i));
-			// Client cln = new Client(serverAddr, servPort, i);
-			clientPool[i].start();
+		int clientId = Integer.parseInt(args[2]);
+		if (clientId >= Const.MAX_CLIENT || clientId < 0) {
+			throw new IllegalArgumentException(String.format(
+					"Clientd must between 0 and %d", Const.MAX_CLIENT));
 		}
-
-		for (int i = 0; i < Const.MAX_CLIENT; i++) {
-			clientPool[i].join();
-		}
-
+		Client cln = new Client(serverAddr, servPort, clientId);
+		cln.start();
 	}
 
 }
