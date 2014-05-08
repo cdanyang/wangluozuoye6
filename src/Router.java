@@ -8,18 +8,12 @@ import java.util.Arrays;
 
 public class Router {
 
-	// Header includes: 1 byte dest index, 1 byte src index, 1 byte packet
-	// sequence
-	private final int HEADER_SIZE = 3;
-	// Actual data size in one packet
-	private final int BUFFER_SIZE = 1024;
-
 	private ServerSocket servSock;
-	private ArrayList<Socket> clientPool;
+	private Socket[] clientPool;
 
 	public Router(int port, int maxClient) throws IOException {
 		servSock = new ServerSocket(port);
-		clientPool = new ArrayList<Socket>(maxClient);
+		clientPool = new Socket[maxClient];
 	}
 
 	public void start() throws IOException {
@@ -36,7 +30,7 @@ public class Router {
 
 		RouterRunnable(Socket clntSock) {
 			this.clientSocket = clntSock;
-			buffer = new byte[BUFFER_SIZE + HEADER_SIZE];
+			buffer = new byte[Const.BUFFER_SIZE + Const.HEADER_SIZE];
 		}
 
 		@Override
@@ -47,22 +41,26 @@ public class Router {
 				InputStream in = this.clientSocket.getInputStream();
 				// First byte is client number
 				int clientIndex = in.read();
-				clientPool.add(clientIndex, this.clientSocket);
+				System.out.println("Received " + clientIndex);
+				if (clientIndex > clientPool.length - 1) {
+					System.out.println("Invalid client index:" + clientIndex);
+					return;
+				}
+				clientPool[clientIndex] = this.clientSocket;
 
 				while ((len = in.read(buffer)) != -1) {
 					if (len <= 2) {
 						// Invalid packet
 						continue;
 					}
-					targetClient = buffer[1];
-					if (clientPool.get(targetClient) == null) {
+					targetClient = buffer[0];
+					if (clientPool[targetClient] == null) {
 						System.out.println("Unknown target client: "
 								+ targetClient);
-
 					} else {
-						new Thread(new RouterWriteRunnable(
-								clientPool.get(targetClient), buffer, len))
-								.start();
+						OutputStream out = clientPool[targetClient].getOutputStream();
+						out.write(buffer);
+						out.flush();
 					}
 					Arrays.fill(buffer, (byte) 0);
 				}
@@ -109,7 +107,7 @@ public class Router {
 
 		int servPort = Integer.parseInt(args[0]);
 
-		Router router = new Router(servPort, 10);
+		Router router = new Router(servPort, Const.MAX_CLIENT);
 		router.start();
 	}
 
